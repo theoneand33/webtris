@@ -399,35 +399,35 @@ function drawMenu(){
     {key:'cfg',md:{label:'CONFIG',sub:'handling & more',accent:'#6b7288'},icon:'CF',fn:()=>{goPlay();state='config';}},
   ];
   const W=cvs.width,H=cvs.height;
-  const rw=300,rh=74,gap=8,rx=W-rw-20; // flush to the real right screen edge; vertical column centered
+  const gap=8,n=rows.length,rh=(H-(n+1)*gap-28)/n,rx=W-300-20,rw=300; // rows fill height, 28px reserved at bottom for credit
+  const stretch=60; // ponytail: hovered row extends left into the photo
   // scrim: left→right transparent→dark, so the wallpaper reads on the left and buttons stay legible on the right
   const sg=ctx.createLinearGradient(0,0,W,0);
   sg.addColorStop(0,'rgba(7,8,13,0)');
   sg.addColorStop(0.45,'rgba(7,8,13,0.45)');
   sg.addColorStop(1,'rgba(7,8,13,0.95)');
   ctx.fillStyle=sg;ctx.fillRect(0,0,W,H);
-  const colH=rows.length*(rh+gap)-gap, oy=(H-colH)/2; // vertically center the column on tall screens
   rows.forEach((r,i)=>{
-    const y=oy+i*(rh+gap);
-    const hover=mouseX>=rx&&mouseX<rx+rw&&mouseY>=y&&mouseY<y+rh;
-    menuHover[i]+=((hover?1:0)-menuHover[i])*0.15; // smooth fade
+    const y=gap+i*(rh+gap);
+    menuHover[i]+=((mouseX>=rx-stretch&&mouseX<rx+rw&&mouseY>=y&&mouseY<y+rh?1:0)-menuHover[i])*0.15; // include pre-stretch zone so the leftward extension stays hovered
     const t=menuHover[i];
+    const xt=rx-t*stretch,wt=rw+t*stretch; // animate left on hover
     ctx.globalAlpha=0.13+0.15*t;
-    ctx.fillStyle=r.md.accent;ctx.fillRect(rx,y,rw,rh);
+    ctx.fillStyle=r.md.accent;ctx.fillRect(xt,y,wt,rh);
     ctx.globalAlpha=1;
     if(t>0.005){ // ponytail: guard against 0-width stroke rendering on init
       ctx.save();ctx.shadowColor=r.md.accent;ctx.shadowBlur=18*t;
-      ctx.strokeStyle=r.md.accent;ctx.lineWidth=2*t;ctx.strokeRect(rx+1,y+1,rw-2,rh-2);
+      ctx.strokeStyle=r.md.accent;ctx.lineWidth=2*t;ctx.strokeRect(xt+1,y+1,wt-2,rh-2);
       ctx.restore();ctx.lineWidth=1;
     }
-    glyphIcon(r.icon,rx+26,y+(rh-35)/2,7,r.md.accent);
-    text(r.md.label,rx+110,y+36,24,hover?r.md.accent:'#e8ebf5');
-    text(r.md.sub.toUpperCase(),rx+110,y+56,11,hover?r.md.accent:'#8a90a5');
+    glyphIcon(r.icon,xt+26,y+(rh-35)/2,7,r.md.accent);
+    text(r.md.label,xt+110,y+rh/2-4,24,t>0.5?r.md.accent:'#e8ebf5');
+    text(r.md.sub.toUpperCase(),xt+110,y+rh/2+16,11,t>0.5?r.md.accent:'#8a90a5');
     if(best[r.key]){
       const b=r.key=='sprint'?fmtTime(best[r.key]):best[r.key];
-      text('BEST  '+b,rx+rw-16,y+rh-12,10,'#9aa1b5','right');
+      text('BEST  '+b,xt+wt-16,y+rh-14,10,'#9aa1b5','right');
     }
-    clickZones.push({x:rx,y,w:rw,h:rh,fn:r.fn});
+    clickZones.push({x:xt,y,w:wt,h:rh,fn:r.fn});
   });
   text('WEBTRIS',24,H-30,18,'#e8ebf5'); // watermark on the photo side
   text('arrows move    down soft drop    space hard drop',24,H-62,11,'#cfd3e0');
