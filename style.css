@@ -1,2 +1,2 @@
-html,body{margin:0;height:100%;background:#07080d;background-image:url("https://picsum.photos/1600/1200");background-size:cover;background-position:center;background-attachment:fixed;display:flex;align-items:center;justify-content:center}
+html,body{margin:0;height:100%;background:#07080d;background-image:url("https://picsum.photos/1600/1200");background-size:cover;background-position:center;background-attachment:fixed;display:flex;align-items:center;justify-content:center;overflow:hidden}
 canvas{image-rendering:pixelated;background:transparent}
