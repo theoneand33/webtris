@@ -274,8 +274,8 @@ function text(str,x,y,size=14,color='#cfd3e0',align='left'){
   ctx.fillStyle=color;ctx.textAlign=align;ctx.fillText(str,x,y);
 }
 function panel(x,y,w,h){
-  ctx.fillStyle='#10131d';ctx.fillRect(x,y,w,h);
-  ctx.strokeStyle='#232838';ctx.strokeRect(x+.5,y+.5,w-1,h-1);
+  ctx.fillStyle='rgba(16,19,29,0.82)';ctx.fillRect(x,y,w,h);
+  ctx.strokeStyle='rgba(60,68,100,0.9)';ctx.strokeRect(x+.5,y+.5,w-1,h-1);
 }
 function button(x,y,w,h,label,fn){
   const hover=mouseX>=x&&mouseX<x+w&&mouseY>=y&&mouseY<y+h;
@@ -291,7 +291,8 @@ function draw(){
   // ponytail: cursor based on last frame's clickZones (1-frame lag, invisible); avoids per-state duplication
   const over=clickZones.some(z=>mouseX>=z.x&&mouseX<z.x+z.w&&mouseY>=z.y&&mouseY<z.y+z.h);
   cvs.style.cursor=over?'pointer':'default';
-  ctx.fillStyle='#07080d';ctx.fillRect(0,0,600,660);
+  ctx.clearRect(0,0,600,660); // ponytail: transparent so body wallpaper photo shows
+  ctx.fillStyle='rgba(7,8,13,0.5)';ctx.fillRect(0,0,600,660);
   clickZones=[];
   if(mode=='versus'){CELL=20;BX=30;BY=40;}else{CELL=30;BX=150;BY=30;}
   if(state=='menu'){drawMenu();return;}
@@ -299,11 +300,11 @@ function draw(){
   if(state=='diff'){drawDiff();return;}
   // ponytail: cursor set once at end of draw() based on clickZones, not per-state
   // board
-  ctx.fillStyle='#0d1018';ctx.fillRect(BX,BY,COLS*CELL,ROWS*CELL);
+  ctx.fillStyle='rgba(13,16,24,0.82)';ctx.fillRect(BX,BY,COLS*CELL,ROWS*CELL);
   ctx.strokeStyle='rgba(255,255,255,0.04)';
   for(let x=1;x<COLS;x++){ctx.beginPath();ctx.moveTo(BX+x*CELL,BY);ctx.lineTo(BX+x*CELL,BY+ROWS*CELL);ctx.stroke();}
   for(let y=1;y<ROWS;y++){ctx.beginPath();ctx.moveTo(BX,BY+y*CELL);ctx.lineTo(BX+COLS*CELL,BY+y*CELL);ctx.stroke();}
-  ctx.strokeStyle='#232838';ctx.strokeRect(BX+.5,BY+.5,COLS*CELL-1,ROWS*CELL-1);
+  ctx.strokeStyle='rgba(60,68,100,0.9)';ctx.strokeRect(BX+.5,BY+.5,COLS*CELL-1,ROWS*CELL-1);
   for(let y=HID;y<ROWS+HID;y++)for(let x=0;x<COLS;x++)if(board[y][x])cell(x,y,SHAPES[board[y][x]].c);
   for(const l of lands){
     const a=1-l.t/150;
@@ -430,9 +431,9 @@ function drawDiff(){
   DIFF_NAMES.forEach((n,i)=>{
     const y=170+i*72;
     const hover=mouseX>=150&&mouseX<450&&mouseY>=y&&mouseY<y+56;
-    ctx.fillStyle=hover?'#161a26':'#10131d';ctx.fillRect(150,y,300,56);
+    ctx.fillStyle=hover?'rgba(40,46,68,0.85)':'rgba(16,19,29,0.82)';ctx.fillRect(150,y,300,56);
     ctx.fillStyle=accents[i];ctx.fillRect(150,y,4,56);
-    ctx.strokeStyle=hover?accents[i]:'#232838';ctx.strokeRect(150.5,y+.5,299,55);
+    ctx.strokeStyle=hover?accents[i]:'rgba(60,68,100,0.9)';ctx.strokeRect(150.5,y+.5,299,55);
     text('['+(i+1)+']',166,y+24,11,'#6b7288');
     text(n,196,y+34,18,hover?accents[i]:'#e8ebf5');
     clickZones.push({x:150,y,w:300,h:56,fn:()=>startVs(i+1)});
@@ -450,9 +451,9 @@ function drawConfig(){
   ];
   rows.forEach((r,i)=>{
     const y=180+i*88;
-    ctx.fillStyle='#10131d';ctx.fillRect(80,y,440,72);
+    ctx.fillStyle='rgba(16,19,29,0.82)';ctx.fillRect(80,y,440,72);
     ctx.fillStyle='#8fa3ff';ctx.fillRect(80,y,4,72);
-    ctx.strokeStyle='#232838';ctx.strokeRect(80.5,y+.5,439,71);
+    ctx.strokeStyle='rgba(60,68,100,0.9)';ctx.strokeRect(80.5,y+.5,439,71);
     text(r.l,100,y+26,16,'#e8ebf5');
     text(r.sub,100,y+48,11,'#6b7288');
     button(330,y+20,36,32,'-',()=>{r.s(Math.max(r.lo,r.g()-r.st));saveHand();});
@@ -491,15 +492,15 @@ function meter(x,sum){
 }
 function drawBot(g){
   const bx=370;
-  ctx.fillStyle='#0d1018';ctx.fillRect(bx,BY,COLS*CELL,ROWS*CELL);
-  ctx.strokeStyle='#232838';ctx.strokeRect(bx+.5,BY+.5,COLS*CELL-1,ROWS*CELL-1);
+  ctx.fillStyle='rgba(13,16,24,0.82)';ctx.fillRect(bx,BY,COLS*CELL,ROWS*CELL);
+  ctx.strokeStyle='rgba(60,68,100,0.9)';ctx.strokeRect(bx+.5,BY+.5,COLS*CELL-1,ROWS*CELL-1);
   for(let y=HID;y<ROWS+HID;y++)for(let x=0;x<COLS;x++)
     if(g.board[y][x])block(bx+x*CELL,BY+(y-HID)*CELL,CELL,SHAPES[g.board[y][x]].c);
   if(g.cur)for(let y=0;y<g.cur.m.length;y++)for(let x=0;x<g.cur.m[y].length;x++)
     if(g.cur.m[y][x]&&g.cur.y+y>=HID)block(bx+(g.cur.x+x)*CELL,BY+(g.cur.y+y-HID)*CELL,CELL,SHAPES[g.cur.t].c);
 }
 function drawPause(){
-  ctx.fillStyle='rgba(5,6,10,0.78)';ctx.fillRect(0,0,600,660);
+  ctx.fillStyle='rgba(5,6,10,0.6)';ctx.fillRect(0,0,600,660);
   text('PAUSED',300,260,36,'#e8ebf5','center');
   ctx.fillStyle='#8fa3ff';ctx.fillRect(264,278,72,3);
   button(220,330,160,36,'esc - resume',()=>{state='play';});
@@ -507,7 +508,7 @@ function drawPause(){
   button(220,418,160,36,'q - quit',()=>{saveBest();state='menu';});
 }
 function drawOver(){
-  ctx.fillStyle='rgba(5,6,10,0.85)';ctx.fillRect(0,0,600,660);
+  ctx.fillStyle='rgba(5,6,10,0.7)';ctx.fillRect(0,0,600,660);
   const isVs=mode=='versus'&&vs;
   const md=MODES[mode];
   const won=isVs?vs.win:(md&&((md.goal&&lines>=md.goal)||mode=='ultra'));
