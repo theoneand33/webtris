@@ -545,7 +545,6 @@ function drawBot(g){
     if(g.cur.m[y][x]&&g.cur.y+y>=HID)block(bx+(g.cur.x+x)*CELL,BY+(g.cur.y+y-HID)*CELL,CELL,SHAPES[g.cur.t].c);
 }
 function drawPause(){
-  ctx.fillStyle='rgba(5,6,10,0.6)';ctx.fillRect(0,0,600,660);
   text('PAUSED',300,260,36,'#e8ebf5','center');
   ctx.fillStyle='#8fa3ff';ctx.fillRect(264,278,72,3);
   button(220,330,160,36,'esc - resume',()=>{state='play';});  button(220,374,160,36,'r - retry',()=>mode=='versus'?startVs(vs.diff):startMode(mode));
