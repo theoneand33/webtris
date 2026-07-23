@@ -112,7 +112,7 @@ function startMode(m){
   hold=null;canHold=true;
   lines=0;score=0;level=1;combo=-1;b2b=0;pieces=0;time=0;
   flashes=[];popups=[];lands=[];drops=[];
-  spawn();goPlay();
+  spawn();state='play';goPlay();
 }
 function grounded(){return collide(cur.m,cur.x,cur.y+1);}
 function tryMove(dx,dy){
@@ -305,7 +305,7 @@ function draw(){
   const over=clickZones.some(z=>mouseX>=z.x&&mouseX<z.x+z.w&&mouseY>=z.y&&mouseY<z.y+z.h);
   cvs.style.cursor=over?'pointer':'default';
   ctx.clearRect(0,0,cvs.width,cvs.height); // ponytail: transparent so body wallpaper photo shows
-  if(state!='menu'){ctx.fillStyle='rgba(7,8,13,0.5)';ctx.fillRect(0,0,cvs.width,cvs.height);} // menu draws its own right-side scrim
+  // ponytail: no blanket darken in play mode — board & HUD panels paint their own opaque bg, so the wallpaper reads full-screen behind them (pause/over draw their own scrim)
   clickZones=[];
   if(mode=='versus'){CELL=20;BX=30;BY=40;}else{CELL=30;BX=150;BY=30;}
   if(state=='menu'){drawMenu();return;}
@@ -410,7 +410,7 @@ function drawMenu(){
     {key:'cfg',md:{label:'CONFIG',sub:'handling & more',accent:'#6b7288'},icon:'CF',fn:()=>{goPlay();state='config';}},
   ];
   const W=cvs.width,H=cvs.height;
-  const gap=14,n=rows.length,rh=(H-(n+1)*gap-28)/n,rx=W-300-20,rw=300; // rows fill height, 28px reserved at bottom for credit
+  const gap=20,n=rows.length,rh=(H-(n+1)*gap-28)/n,rx=W-300-20,rw=300; // rows fill height, 28px reserved at bottom for credit
   const stretch=60; // ponytail: hovered row extends left into the photo
   // scrim: left→right transparent→dark, so the wallpaper reads on the left and buttons stay legible on the right
   const sg=ctx.createLinearGradient(0,0,W,0);
