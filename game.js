@@ -10,6 +10,17 @@ const cvs=document.getElementById('c'), ctx=cvs.getContext('2d');
 // ponytail: menu fills the window so buttons reach the real screen edge; play stays 600x660 centered
 function goMenu(){state='menu';cvs.width=innerWidth;cvs.height=innerHeight;}
 function goPlay(){cvs.width=600;cvs.height=660;}
+// wallpaper: wallhaven keyless API, q=tag, random sort; picsum fallback on any failure. Change WALLPAPER_TAG to filter.
+const WALLPAPER_TAG='nature';
+(async()=>{
+  try{
+    const r=await fetch(`https://wallhaven.cc/api/v1/search?q=${WALLPAPER_TAG}&sorting=random&atleast=1920x1080&purity=100`);
+    const j=await r.json();
+    const hits=j.data||[];
+    if(hits.length){const p=hits[Math.random()*Math.min(hits.length,24)|0].path;document.body.style.backgroundImage=`url("${p}")`;return;}
+  }catch(e){}
+  document.body.style.backgroundImage='url("https://picsum.photos/1600/1200")'; // fallback: random Unsplash-sourced photo
+})();
 
 const SHAPES={
   I:{m:[[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]],c:'#2fd4e8'},
@@ -399,7 +410,7 @@ function drawMenu(){
     {key:'cfg',md:{label:'CONFIG',sub:'handling & more',accent:'#6b7288'},icon:'CF',fn:()=>{goPlay();state='config';}},
   ];
   const W=cvs.width,H=cvs.height;
-  const gap=8,n=rows.length,rh=(H-(n+1)*gap-28)/n,rx=W-300-20,rw=300; // rows fill height, 28px reserved at bottom for credit
+  const gap=14,n=rows.length,rh=(H-(n+1)*gap-28)/n,rx=W-300-20,rw=300; // rows fill height, 28px reserved at bottom for credit
   const stretch=60; // ponytail: hovered row extends left into the photo
   // scrim: left→right transparent→dark, so the wallpaper reads on the left and buttons stay legible on the right
   const sg=ctx.createLinearGradient(0,0,W,0);
@@ -432,7 +443,7 @@ function drawMenu(){
   text('WEBTRIS',24,H-30,18,'#e8ebf5'); // watermark on the photo side
   text('arrows move    down soft drop    space hard drop',24,H-62,11,'#cfd3e0');
   text('z / x rotate    c hold    r retry    esc menu',24,H-42,11,'#cfd3e0');
-  text('PHOTO: UNSPLASH (via picsum)',W-16,H-18,9,'#6b7288','right'); // ponytail: blanket credit, tetr.io convention
+    text('PHOTO: WALLHAVEN (nature)',W-16,H-18,9,'#6b7288','right'); // ponytail: blanket credit, tetr.io convention
 }
 function drawDiff(){
   text('VS AI',300,90,44,'#e8ebf5','center');
