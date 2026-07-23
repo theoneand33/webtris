@@ -292,7 +292,7 @@ function draw(){
   const over=clickZones.some(z=>mouseX>=z.x&&mouseX<z.x+z.w&&mouseY>=z.y&&mouseY<z.y+z.h);
   cvs.style.cursor=over?'pointer':'default';
   ctx.clearRect(0,0,600,660); // ponytail: transparent so body wallpaper photo shows
-  ctx.fillStyle='rgba(7,8,13,0.5)';ctx.fillRect(0,0,600,660);
+  if(state!='menu'){ctx.fillStyle='rgba(7,8,13,0.5)';ctx.fillRect(0,0,600,660);} // menu draws its own right-side scrim
   clickZones=[];
   if(mode=='versus'){CELL=20;BX=30;BY=40;}else{CELL=30;BX=150;BY=30;}
   if(state=='menu'){drawMenu();return;}
@@ -396,7 +396,13 @@ function drawMenu(){
     ...Object.entries(MODES).map(([m,md],i)=>({key:m,md,icon:['SP','BL','MA','ZE','VS'][i],fn:()=>m=='versus'?state='diff':startMode(m)})),
     {key:'cfg',md:{label:'CONFIG',sub:'handling & more',accent:'#6b7288'},icon:'CF',fn:()=>{state='config';}},
   ];
-  const rx=140,rw=460,rh=74,gap=8; // rw bleeds to the right canvas edge
+  const rx=260,rw=320,rh=74,gap=8; // right-aligned column; photo fades to dark behind it
+  // scrim: left→right transparent→dark, so the wallpaper reads on the left and buttons stay legible on the right
+  const sg=ctx.createLinearGradient(150,0,600,0);
+  sg.addColorStop(0,'rgba(7,8,13,0)');
+  sg.addColorStop(0.55,'rgba(7,8,13,0.55)');
+  sg.addColorStop(1,'rgba(7,8,13,0.92)');
+  ctx.fillStyle=sg;ctx.fillRect(150,0,450,660);
   rows.forEach((r,i)=>{
     const y=44+i*(rh+gap);
     const hover=mouseX>=rx&&mouseX<rx+rw&&mouseY>=y&&mouseY<y+rh;
@@ -419,9 +425,10 @@ function drawMenu(){
     }
     clickZones.push({x:rx,y,w:rw,h:rh,fn:r.fn});
   });
-  text('WEBTRIS',24,636,18,'#2a3040'); // watermark, like the tetr.io logo corner
-  text('arrows move    down soft drop    space hard drop',300,604,11,'#6b7288','center');
-  text('z / x rotate    c hold    r retry    esc menu',300,624,11,'#6b7288','center');
+  text('WEBTRIS',24,636,18,'#e8ebf5'); // watermark on the photo side
+  text('arrows move    down soft drop    space hard drop',24,604,11,'#cfd3e0');
+  text('z / x rotate    c hold    r retry    esc menu',24,624,11,'#cfd3e0');
+  text('PHOTO: UNSPLASH (via picsum)',584,656,9,'#6b7288','right'); // ponytail: blanket credit, tetr.io convention
 }
 function drawDiff(){
   text('VS AI',300,90,44,'#e8ebf5','center');
