@@ -4,9 +4,18 @@ let CELL=30, BX=150, BY=30; // mutable: versus mode uses a smaller layout
 const LOCK_DELAY=500, MAX_RESETS=15;
 let DAS=110, ARR=25, SOFT=100;
 try{const h=JSON.parse(localStorage.getItem('webtris_handling')||'{}');if(h.das)DAS=h.das;if(h.arr)ARR=h.arr;if(h.soft!=null)SOFT=h.soft;}catch(e){}
+const DEFAULT_KEYS={left:'ArrowLeft',right:'ArrowRight',softDrop:'ArrowDown',rotCCW:'KeyZ',rotCW:'KeyX',hardDrop:'Space',hold:'KeyC',retry:'KeyR',pause:'Escape',quit:'KeyQ'};
+let keybinds={};
+try{const k=JSON.parse(localStorage.getItem('webtris_keys')||'{}');keybinds={...DEFAULT_KEYS,...k};}catch(e){keybinds={...DEFAULT_KEYS};}
 // versus/blitz attack table (ponytail: standard modern versus, no all-spin/surge variants)
 const ATK={n:[0,1,2,4],ts:[0,2,4,6]},CMB=[0,1,1,2,2,3,3,4];
 const cvs=document.getElementById('c'), ctx=cvs.getContext('2d');
+// ponytail: menu fills the window so buttons reach the real screen edge; play stays 600x660 centered
+function goMenu(){state='menu';cvs.width=innerWidth;cvs.height=innerHeight;}
+function goPlay(){cvs.width=600;cvs.height=660;}
+// wallpaper: 10 local WebP images cycling daily. Compressed with mogrify -resize 1920x1920> -quality 80.
+const WPs=['0wjlxx','1j3q91','43gv29','45vp75','48175o','4ywjdx','jx2zqy','lqrl5r','n66917','nex9do'].map(s=>`public/wallhaven-${s}.webp`);
+document.body.style.backgroundImage=`url("${WPs[Math.floor(Date.now()/86400000)%10]}")`;
 
 const SHAPES={
   I:{m:[[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]],c:'#2fd4e8'},
@@ -38,6 +47,11 @@ const MODES={
   zen:{label:'ZEN',sub:'endless mode',accent:'#3ecf4a',mino:'S'},
   versus:{label:'VS AI',sub:'fight the cpu',accent:'#ef4a4a',mino:'Z'},
 };
+const KEY_ACTIONS=[
+  {id:'left',label:'Move Left'},{id:'right',label:'Move Right'},{id:'softDrop',label:'Soft Drop'},
+  {id:'rotCCW',label:'Rotate CCW'},{id:'rotCW',label:'Rotate CW'},{id:'hardDrop',label:'Hard Drop'},
+  {id:'hold',label:'Hold'},{id:'retry',label:'Retry'},{id:'pause',label:'Pause'},{id:'quit',label:'Quit'},
+];
 
 let board, bag, cur, hold, canHold, state='menu', mode=null;
 let menuHover=[0,0,0,0,0,0]; // per-row glow fade (0→1)
@@ -46,6 +60,7 @@ let flashes=[], popups=[], lands=[], drops=[], spawnT=0;
 let moveDir=0, dasT=0, arrT=0, prevIv=0;
 let vs=null; // versus match state, set by startVs()
 const keys={};
+let rebindAction=null;
 let clickZones=[];
 let best={};
 let mouseX=-1,mouseY=-1; // ponytail: hover state via raw coords, no React state equivalent
@@ -98,7 +113,7 @@ function startMode(m){
   hold=null;canHold=true;
   lines=0;score=0;level=1;combo=-1;b2b=0;pieces=0;time=0;
   flashes=[];popups=[];lands=[];drops=[];
-  spawn();state='play';
+  spawn();state='play';goPlay();
 }
 function grounded(){return collide(cur.m,cur.x,cur.y+1);}
 function tryMove(dx,dy){
@@ -227,15 +242,14 @@ function update(dt){
   if(mode=='ultra'&&time>=MODES.ultra.time)return finish();
   if(mode=='versus'&&vs){
     botUpdate(vs.bot,dt);
-    if(vs.bot.dead){vs.win=true;state='over';beep(660,0.2);beep(990,0.3);return;}
-  }
+    if(vs.bot.dead){vs.win=true;state='over';beep(660,0.2);beep(990,0.3);return;}  }
   // DAS/ARR
   if(moveDir){
     dasT+=dt;
     if(dasT>=DAS){arrT+=dt;while(arrT>=ARR){tryMove(moveDir,0);arrT-=ARR;}}
   }
   // gravity / soft drop
-  const soft=keys['ArrowDown'];
+  const soft=keys[keybinds.softDrop];
   const iv=soft?Math.min(gravity(),SOFT):gravity();
   if(prevIv&&iv!=prevIv)gravAcc*=iv/prevIv; // keep position continuous, no jump on speed change
   prevIv=iv;
@@ -274,8 +288,8 @@ function text(str,x,y,size=14,color='#cfd3e0',align='left'){
   ctx.fillStyle=color;ctx.textAlign=align;ctx.fillText(str,x,y);
 }
 function panel(x,y,w,h){
-  ctx.fillStyle='#10131d';ctx.fillRect(x,y,w,h);
-  ctx.strokeStyle='#232838';ctx.strokeRect(x+.5,y+.5,w-1,h-1);
+  ctx.fillStyle='rgba(16,19,29,0.82)';ctx.fillRect(x,y,w,h);
+  ctx.strokeStyle='rgba(60,68,100,0.9)';ctx.strokeRect(x+.5,y+.5,w-1,h-1);
 }
 function button(x,y,w,h,label,fn){
   const hover=mouseX>=x&&mouseX<x+w&&mouseY>=y&&mouseY<y+h;
@@ -291,7 +305,8 @@ function draw(){
   // ponytail: cursor based on last frame's clickZones (1-frame lag, invisible); avoids per-state duplication
   const over=clickZones.some(z=>mouseX>=z.x&&mouseX<z.x+z.w&&mouseY>=z.y&&mouseY<z.y+z.h);
   cvs.style.cursor=over?'pointer':'default';
-  ctx.fillStyle='#07080d';ctx.fillRect(0,0,600,660);
+  ctx.clearRect(0,0,cvs.width,cvs.height); // ponytail: transparent so body wallpaper photo shows
+  // ponytail: no blanket darken in play mode — board & HUD panels paint their own opaque bg, so the wallpaper reads full-screen behind them (pause/over draw their own scrim)
   clickZones=[];
   if(mode=='versus'){CELL=20;BX=30;BY=40;}else{CELL=30;BX=150;BY=30;}
   if(state=='menu'){drawMenu();return;}
@@ -299,11 +314,11 @@ function draw(){
   if(state=='diff'){drawDiff();return;}
   // ponytail: cursor set once at end of draw() based on clickZones, not per-state
   // board
-  ctx.fillStyle='#0d1018';ctx.fillRect(BX,BY,COLS*CELL,ROWS*CELL);
+  ctx.fillStyle='rgba(13,16,24,0.82)';ctx.fillRect(BX,BY,COLS*CELL,ROWS*CELL);
   ctx.strokeStyle='rgba(255,255,255,0.04)';
   for(let x=1;x<COLS;x++){ctx.beginPath();ctx.moveTo(BX+x*CELL,BY);ctx.lineTo(BX+x*CELL,BY+ROWS*CELL);ctx.stroke();}
   for(let y=1;y<ROWS;y++){ctx.beginPath();ctx.moveTo(BX,BY+y*CELL);ctx.lineTo(BX+COLS*CELL,BY+y*CELL);ctx.stroke();}
-  ctx.strokeStyle='#232838';ctx.strokeRect(BX+.5,BY+.5,COLS*CELL-1,ROWS*CELL-1);
+  ctx.strokeStyle='rgba(60,68,100,0.9)';ctx.strokeRect(BX+.5,BY+.5,COLS*CELL-1,ROWS*CELL-1);
   for(let y=HID;y<ROWS+HID;y++)for(let x=0;x<COLS;x++)if(board[y][x])cell(x,y,SHAPES[board[y][x]].c);
   for(const l of lands){
     const a=1-l.t/150;
@@ -326,7 +341,7 @@ function draw(){
     for(let y=0;y<cur.m.length;y++)for(let x=0;x<cur.m[y].length;x++)
       if(cur.m[y][x])cell(cur.x+x,gy+y,SHAPES[cur.t].c,0.15);
     // smooth fall: fractional offset from gravity progress; 0 when landed
-    const iv=keys['ArrowDown']?Math.min(gravity(),SOFT):gravity();
+    const iv=keys[keybinds.softDrop]?Math.min(gravity(),SOFT):gravity();
     const off=grounded()?0:Math.min(gravAcc/iv,1);
     const fa=Math.min(1,spawnT/120); // spawn fade-in
     for(let y=0;y<cur.m.length;y++)for(let x=0;x<cur.m[y].length;x++)
@@ -392,35 +407,44 @@ function glyphIcon(str,x,y,s,color){
 function drawMenu(){
   // tetr.io-style full-width rows, tinted with each mode's accent
   const rows=[
-    ...Object.entries(MODES).map(([m,md],i)=>({key:m,md,icon:['SP','BL','MA','ZE','VS'][i],fn:()=>m=='versus'?state='diff':startMode(m)})),
-    {key:'cfg',md:{label:'CONFIG',sub:'handling & more',accent:'#6b7288'},icon:'CF',fn:()=>{state='config';}},
+    ...Object.entries(MODES).map(([m,md],i)=>({key:m,md,icon:['SP','BL','MA','ZE','VS'][i],fn:()=>m=='versus'?(goPlay(),state='diff'):startMode(m)})),
+    {key:'cfg',md:{label:'SETTINGS',sub:'handling & keybindings',accent:'#6b7288'},icon:'CF',fn:()=>{cvs.width=innerWidth;cvs.height=innerHeight;state='config';}},
   ];
-  const rx=140,rw=460,rh=74,gap=8; // rw bleeds to the right canvas edge
+  const W=cvs.width,H=cvs.height;
+  const gap=20,n=rows.length,rh=(H-(n+1)*gap-28)/n,rx=W-300-20,rw=300; // rows fill height, 28px reserved at bottom for credit
+  const stretch=60; // ponytail: hovered row extends left into the photo
+  // scrim: left→right transparent→dark, so the wallpaper reads on the left and buttons stay legible on the right
+  const sg=ctx.createLinearGradient(0,0,W,0);
+  sg.addColorStop(0,'rgba(7,8,13,0)');
+  sg.addColorStop(0.45,'rgba(7,8,13,0.45)');
+  sg.addColorStop(1,'rgba(7,8,13,0.95)');
+  ctx.fillStyle=sg;ctx.fillRect(0,0,W,H);
   rows.forEach((r,i)=>{
-    const y=44+i*(rh+gap);
-    const hover=mouseX>=rx&&mouseX<rx+rw&&mouseY>=y&&mouseY<y+rh;
-    menuHover[i]+=((hover?1:0)-menuHover[i])*0.15; // smooth fade
+    const y=gap+i*(rh+gap);
+    menuHover[i]+=((mouseX>=rx-stretch&&mouseX<rx+rw&&mouseY>=y&&mouseY<y+rh?1:0)-menuHover[i])*0.15; // include pre-stretch zone so the leftward extension stays hovered
     const t=menuHover[i];
+    const xt=rx-t*stretch,wt=rw+t*stretch; // animate left on hover
     ctx.globalAlpha=0.13+0.15*t;
-    ctx.fillStyle=r.md.accent;ctx.fillRect(rx,y,rw,rh);
+    ctx.fillStyle=r.md.accent;ctx.fillRect(xt,y,wt,rh);
     ctx.globalAlpha=1;
     if(t>0.005){ // ponytail: guard against 0-width stroke rendering on init
       ctx.save();ctx.shadowColor=r.md.accent;ctx.shadowBlur=18*t;
-      ctx.strokeStyle=r.md.accent;ctx.lineWidth=2*t;ctx.strokeRect(rx+1,y+1,rw-2,rh-2);
+      ctx.strokeStyle=r.md.accent;ctx.lineWidth=2*t;ctx.strokeRect(xt+1,y+1,wt-2,rh-2);
       ctx.restore();ctx.lineWidth=1;
     }
-    glyphIcon(r.icon,rx+26,y+(rh-35)/2,7,r.md.accent);
-    text(r.md.label,rx+110,y+36,24,hover?r.md.accent:'#e8ebf5');
-    text(r.md.sub.toUpperCase(),rx+110,y+56,11,hover?r.md.accent:'#8a90a5');
+    glyphIcon(r.icon,xt+26,y+(rh-35)/2,7,r.md.accent);
+    text(r.md.label,xt+110,y+rh/2-4,24,t>0.5?r.md.accent:'#e8ebf5');
+    text(r.md.sub.toUpperCase(),xt+110,y+rh/2+16,11,t>0.5?r.md.accent:'#8a90a5');
     if(best[r.key]){
       const b=r.key=='sprint'?fmtTime(best[r.key]):best[r.key];
-      text('BEST  '+b,rx+rw-16,y+rh-12,10,'#9aa1b5','right');
+      text('BEST  '+b,xt+wt-16,y+rh-14,10,'#9aa1b5','right');
     }
-    clickZones.push({x:rx,y,w:rw,h:rh,fn:r.fn});
+    clickZones.push({x:xt,y,w:wt,h:rh,fn:r.fn});
   });
-  text('WEBTRIS',24,636,18,'#2a3040'); // watermark, like the tetr.io logo corner
-  text('arrows move    down soft drop    space hard drop',300,604,11,'#6b7288','center');
-  text('z / x rotate    c hold    r retry    esc menu',300,624,11,'#6b7288','center');
+  text('WEBTRIS',24,H-30,18,'#e8ebf5'); // watermark on the photo side
+  text('arrows move    down soft drop    space hard drop',24,H-62,11,'#cfd3e0');
+  text('z / x rotate    c hold    r retry    esc menu    settings: cfg',24,H-42,11,'#cfd3e0');
+    text('PHOTO: WALLHAVEN (nature)',W-16,H-18,9,'#6b7288','right'); // ponytail: blanket credit, tetr.io convention
 }
 function drawDiff(){
   text('VS AI',300,90,44,'#e8ebf5','center');
@@ -430,9 +454,9 @@ function drawDiff(){
   DIFF_NAMES.forEach((n,i)=>{
     const y=170+i*72;
     const hover=mouseX>=150&&mouseX<450&&mouseY>=y&&mouseY<y+56;
-    ctx.fillStyle=hover?'#161a26':'#10131d';ctx.fillRect(150,y,300,56);
+    ctx.fillStyle=hover?'rgba(40,46,68,0.85)':'rgba(16,19,29,0.82)';ctx.fillRect(150,y,300,56);
     ctx.fillStyle=accents[i];ctx.fillRect(150,y,4,56);
-    ctx.strokeStyle=hover?accents[i]:'#232838';ctx.strokeRect(150.5,y+.5,299,55);
+    ctx.strokeStyle=hover?accents[i]:'rgba(60,68,100,0.9)';ctx.strokeRect(150.5,y+.5,299,55);
     text('['+(i+1)+']',166,y+24,11,'#6b7288');
     text(n,196,y+34,18,hover?accents[i]:'#e8ebf5');
     clickZones.push({x:150,y,w:300,h:56,fn:()=>startVs(i+1)});
@@ -440,26 +464,48 @@ function drawDiff(){
   text('esc - back',300,628,11,'#6b7288','center');
 }
 function drawConfig(){
-  text('HANDLING',300,90,40,'#e8ebf5','center');
-  ctx.fillStyle='#8fa3ff';ctx.fillRect(258,108,84,3);
-  text('tune your piece movement',300,128,12,'#6b7288','center');
-  const rows=[
-    {l:'DAS',sub:'delay before auto-shift',g:()=>DAS,s:v=>DAS=v,lo:30,hi:200,st:10,u:' ms'},
-    {l:'ARR',sub:'auto-shift rate',g:()=>ARR,s:v=>ARR=v,lo:5,hi:100,st:5,u:' ms'}, // ponytail: 5ms floor, effectively instant
-    {l:'SOFT DROP',sub:'soft drop speed',g:()=>SOFT,s:v=>SOFT=v,lo:0,hi:200,st:10,u:' ms'},
+  const W=cvs.width,H=cvs.height,cx=W/2,pw=540,ox=cx-pw/2;
+  ctx.fillStyle='rgba(7,8,13,0.92)';ctx.fillRect(0,0,W,H);
+  text('SETTINGS',cx,55,36,'#e8ebf5','center');
+  ctx.fillStyle='#8fa3ff';ctx.fillRect(cx-60,70,120,3);
+  text('handling & keybindings — click a binding then press the new key',cx,92,12,'#6b7288','center');
+  const hrows=[
+    {l:'DAS',sub:'delay before auto-shift',g:()=>DAS,s:v=>DAS=v,lo:30,hi:200,st:10,u:'ms'},
+    {l:'ARR',sub:'auto-shift rate',g:()=>ARR,s:v=>ARR=v,lo:5,hi:100,st:5,u:'ms'},
+    {l:'SOFT DROP',sub:'soft drop speed',g:()=>SOFT,s:v=>SOFT=v,lo:0,hi:200,st:10,u:'ms'},
   ];
-  rows.forEach((r,i)=>{
-    const y=180+i*88;
-    ctx.fillStyle='#10131d';ctx.fillRect(80,y,440,72);
-    ctx.fillStyle='#8fa3ff';ctx.fillRect(80,y,4,72);
-    ctx.strokeStyle='#232838';ctx.strokeRect(80.5,y+.5,439,71);
-    text(r.l,100,y+26,16,'#e8ebf5');
-    text(r.sub,100,y+48,11,'#6b7288');
-    button(330,y+20,36,32,'-',()=>{r.s(Math.max(r.lo,r.g()-r.st));saveHand();});
-    text(r.g()==0?'INSTANT':r.g()+r.u,416,y+42,16,'#e8ebf5','center');
-    button(466,y+20,36,32,'+',()=>{r.s(Math.min(r.hi,r.g()+r.st));saveHand();});
+  hrows.forEach((r,i)=>{
+    const y=125+i*58;
+    ctx.fillStyle='rgba(16,19,29,0.82)';ctx.fillRect(ox,y,pw,48);
+    ctx.fillStyle='#8fa3ff';ctx.fillRect(ox,y,3,48);
+    ctx.strokeStyle='rgba(60,68,100,0.9)';ctx.strokeRect(ox+.5,y+.5,pw-1,47);
+    text(r.l,ox+14,y+20,14,'#e8ebf5');
+    text(r.sub,ox+14,y+38,10,'#6b7288');
+    const bx=ox+pw-130;
+    button(bx-46,y+8,34,32,'-',()=>{r.s(Math.max(r.lo,r.g()-r.st));saveHand();});
+    text(r.g()==0?'INST':r.g()+r.u,bx+16,y+28,14,'#e8ebf5','center');
+    button(bx+38,y+8,34,32,'+',()=>{r.s(Math.min(r.hi,r.g()+r.st));saveHand();});
   });
-  button(220,510,160,36,'esc - back',()=>{state='menu';});
+  // keybindings: 2 columns x 5 rows
+  const ky=125+3*58+14;
+  text('KEYBINDINGS',cx,ky,14,'#8fa3ff','center');
+  const cw=(pw-48)/2;
+  const short=k=>{const m={'ArrowLeft':'Left','ArrowRight':'Right','ArrowDown':'Down','ArrowUp':'Up','ShiftLeft':'L-Shift','ShiftRight':'R-Shift','Escape':'Esc',Space:'Space'};return m[k]||k.replace(/^(Key|Digit)/,'');};
+  KEY_ACTIONS.forEach((a,i)=>{
+    const row=i%5,col=i/5|0;
+    const x=ox+16+col*(cw+16),y=ky+24+row*30;
+    const hover=mouseX>=x&&mouseX<x+cw&&mouseY>=y&&mouseY<y+26;
+    ctx.fillStyle=rebindAction==a.id?'rgba(60,58,40,0.85)':'rgba(16,19,29,0.82)';
+    ctx.fillRect(x,y,cw,26);
+    ctx.strokeStyle=rebindAction==a.id?'#ffd75e':hover?'#8fa3ff':'rgba(60,68,100,0.9)';
+    ctx.strokeRect(x+.5,y+.5,cw-1,25);
+    text(a.label,x+10,y+18,11,'#e8ebf5');
+    text(rebindAction==a.id?'...':short(keybinds[a.id]),x+cw-10,y+18,11,rebindAction==a.id?'#ffd75e':'#8fa3ff','right');
+    clickZones.push({x,y,w:cw,h:26,fn:()=>{rebindAction=rebindAction==a.id?null:a.id;}});
+  });
+  const by=ky+24+5*30+14;
+  button(cx-80,by,160,34,'restore defaults',()=>{keybinds={...DEFAULT_KEYS};try{localStorage.setItem('webtris_keys',JSON.stringify(keybinds))}catch(e){}});
+  button(cx-80,by+44,160,34,'esc - back',()=>{goMenu();});
 }
 function saveHand(){
   try{localStorage.setItem('webtris_handling',JSON.stringify({das:DAS,arr:ARR,soft:SOFT}))}catch(e){}
@@ -491,23 +537,22 @@ function meter(x,sum){
 }
 function drawBot(g){
   const bx=370;
-  ctx.fillStyle='#0d1018';ctx.fillRect(bx,BY,COLS*CELL,ROWS*CELL);
-  ctx.strokeStyle='#232838';ctx.strokeRect(bx+.5,BY+.5,COLS*CELL-1,ROWS*CELL-1);
+  ctx.fillStyle='rgba(13,16,24,0.82)';ctx.fillRect(bx,BY,COLS*CELL,ROWS*CELL);
+  ctx.strokeStyle='rgba(60,68,100,0.9)';ctx.strokeRect(bx+.5,BY+.5,COLS*CELL-1,ROWS*CELL-1);
   for(let y=HID;y<ROWS+HID;y++)for(let x=0;x<COLS;x++)
     if(g.board[y][x])block(bx+x*CELL,BY+(y-HID)*CELL,CELL,SHAPES[g.board[y][x]].c);
   if(g.cur)for(let y=0;y<g.cur.m.length;y++)for(let x=0;x<g.cur.m[y].length;x++)
     if(g.cur.m[y][x]&&g.cur.y+y>=HID)block(bx+(g.cur.x+x)*CELL,BY+(g.cur.y+y-HID)*CELL,CELL,SHAPES[g.cur.t].c);
 }
 function drawPause(){
-  ctx.fillStyle='rgba(5,6,10,0.78)';ctx.fillRect(0,0,600,660);
+  ctx.fillStyle='rgba(5,6,10,0.6)';ctx.fillRect(0,0,600,660);
   text('PAUSED',300,260,36,'#e8ebf5','center');
   ctx.fillStyle='#8fa3ff';ctx.fillRect(264,278,72,3);
-  button(220,330,160,36,'esc - resume',()=>{state='play';});
-  button(220,374,160,36,'r - retry',()=>mode=='versus'?startVs(vs.diff):startMode(mode));
-  button(220,418,160,36,'q - quit',()=>{saveBest();state='menu';});
+  button(220,330,160,36,'esc - resume',()=>{state='play';});  button(220,374,160,36,'r - retry',()=>mode=='versus'?startVs(vs.diff):startMode(mode));
+  button(220,418,160,36,'q - quit',()=>{saveBest();goMenu();});
 }
 function drawOver(){
-  ctx.fillStyle='rgba(5,6,10,0.85)';ctx.fillRect(0,0,600,660);
+  ctx.fillStyle='rgba(5,6,10,0.7)';ctx.fillRect(0,0,600,660);
   const isVs=mode=='versus'&&vs;
   const md=MODES[mode];
   const won=isVs?vs.win:(md&&((md.goal&&lines>=md.goal)||mode=='ultra'));
@@ -519,58 +564,63 @@ function drawOver(){
   else text('SCORE  '+score,300,330,22,'#e8ebf5','center');
   text('LINES '+lines+'   PIECES '+pieces,300,360,12,'#9aa1b5','center');
   button(220,400,160,36,'r - retry',()=>isVs?startVs(vs.diff):startMode(mode));
-  button(220,444,160,36,'esc - menu',()=>{state='menu';});
+  button(220,444,160,36,'esc - menu',()=>{goMenu();});
 }
 
 // --- input ---
-const GAMEKEYS=['ArrowLeft','ArrowRight','ArrowDown','ArrowUp','Space'];
 addEventListener('keydown',e=>{
-  if(GAMEKEYS.includes(e.code))e.preventDefault();
+  if(Object.values(keybinds).includes(e.code))e.preventDefault();
   if(state=='menu'){
     const i=['Digit1','Digit2','Digit3','Digit4','Digit5','Numpad1','Numpad2','Numpad3','Numpad4','Numpad5'].indexOf(e.code)%5;
     const k=Object.keys(MODES);
-    if(i>=0&&k[i]){k[i]=='versus'?state='diff':startMode(k[i]);}
+    if(i>=0&&k[i]){k[i]=='versus'?(goPlay(),state='diff'):startMode(k[i]);}
     return;
   }
   if(state=='diff'){
     const i=['Digit1','Digit2','Digit3','Digit4','Digit5','Numpad1','Numpad2','Numpad3','Numpad4','Numpad5'].indexOf(e.code)%5;
     if(i>=0)startVs(i+1);
-    if(e.code=='Escape')state='menu';
+    if(e.code=='Escape')goMenu();
     return;
   }
   if(state=='config'){
-    if(e.code=='Escape')state='menu';
+    if(rebindAction&&e.code=='Escape'){rebindAction=null;}
+    else if(e.code=='Escape')goMenu();
+    else if(rebindAction){
+      keybinds[rebindAction]=e.code;
+      try{localStorage.setItem('webtris_keys',JSON.stringify(keybinds))}catch(e2){}
+      rebindAction=null;
+    }
     return;
   }
   if(state=='over'){
-    if(e.code=='KeyR')(mode=='versus'?startVs(vs.diff):startMode(mode));
-    if(e.code=='Escape')state='menu';
+    if(e.code==keybinds.retry)(mode=='versus'?startVs(vs.diff):startMode(mode));
+    if(e.code=='Escape')goMenu();
     return;
   }
   if(state=='pause'){
-    if(e.code=='Escape')state='play';
-    if(e.code=='KeyR')(mode=='versus'?startVs(vs.diff):startMode(mode));
-    if(e.code=='KeyQ'){saveBest();state='menu';}
+    if(e.code==keybinds.pause)state='play';
+    else if(e.code==keybinds.retry)(mode=='versus'?startVs(vs.diff):startMode(mode));
+    else if(e.code==keybinds.quit){saveBest();goMenu();}
     return;
   }
   keys[e.code]=true;
   if(e.repeat)return;
-  if(e.code=='ArrowLeft'){moveDir=-1;dasT=0;arrT=0;tryMove(-1,0);}
-  if(e.code=='ArrowRight'){moveDir=1;dasT=0;arrT=0;tryMove(1,0);}
-  if(e.code=='KeyZ')rotate(-1);
-  if(e.code=='KeyX'||e.code=='ArrowUp')rotate(1);
-  if(e.code=='Space')hardDrop();
-  if(e.code=='KeyC'||e.code=='ShiftLeft')doHold();
-  if(e.code=='KeyR')(mode=='versus'?startVs(vs.diff):startMode(mode));
-  if(e.code=='Escape')state='pause';
+  if(e.code==keybinds.left){moveDir=-1;dasT=0;arrT=0;tryMove(-1,0);}
+  else if(e.code==keybinds.right){moveDir=1;dasT=0;arrT=0;tryMove(1,0);}
+  else if(e.code==keybinds.rotCCW)rotate(-1);
+  else if(e.code==keybinds.rotCW||e.code=='ArrowUp')rotate(1);
+  else if(e.code==keybinds.hardDrop)hardDrop();
+  else if(e.code==keybinds.hold||e.code=='ShiftLeft')doHold();
+  else if(e.code==keybinds.retry)(mode=='versus'?startVs(vs.diff):startMode(mode));
+  else if(e.code==keybinds.pause)state='pause';
 });
 addEventListener('keyup',e=>{
   keys[e.code]=false;
-  if(e.code=='ArrowLeft'&&moveDir==-1){
-    if(keys['ArrowRight']){moveDir=1;dasT=0;arrT=0;tryMove(1,0);}else moveDir=0;
+  if(e.code==keybinds.left&&moveDir==-1){
+    if(keys[keybinds.right]){moveDir=1;dasT=0;arrT=0;tryMove(1,0);}else moveDir=0;
   }
-  if(e.code=='ArrowRight'&&moveDir==1){
-    if(keys['ArrowLeft']){moveDir=-1;dasT=0;arrT=0;tryMove(-1,0);}else moveDir=0;
+  if(e.code==keybinds.right&&moveDir==1){
+    if(keys[keybinds.left]){moveDir=-1;dasT=0;arrT=0;tryMove(-1,0);}else moveDir=0;
   }
 });
 cvs.addEventListener('click',e=>{
@@ -593,4 +643,6 @@ function loop(now){
   update(dt);draw();
   requestAnimationFrame(loop);
 }
+goMenu(); // ponytail: menu fills window on first load so buttons sit at the real screen edge
+addEventListener('resize',()=>{if(state=='menu')goMenu();}); // keep buttons flush to edge on window resize
 requestAnimationFrame(loop);
