@@ -3,10 +3,12 @@ const COLS=10, ROWS=20, HID=2;
 let CELL=30, BX=150, BY=30; // mutable: versus mode uses a smaller layout
 const LOCK_DELAY=500, MAX_RESETS=15;
 let DAS=110, ARR=25, SOFT=100;
-try{const h=JSON.parse(localStorage.getItem('webtris_handling')||'{}');if(h.das)DAS=h.das;if(h.arr)ARR=h.arr;if(h.soft!=null)SOFT=h.soft;}catch(e){}
+function lsGet(k,def){try{const v=JSON.parse(localStorage.getItem(k));return v??def}catch(e){}return def}
+function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+const h=lsGet('webtris_handling',{});if(h.das)DAS=h.das;if(h.arr)ARR=h.arr;if(h.soft!=null)SOFT=h.soft;
 const DEFAULT_KEYS={left:'ArrowLeft',right:'ArrowRight',softDrop:'ArrowDown',rotCCW:'KeyZ',rotCW:'KeyX',hardDrop:'Space',hold:'KeyC',retry:'KeyR',pause:'Escape',quit:'KeyQ'};
 let keybinds={};
-try{const k=JSON.parse(localStorage.getItem('webtris_keys')||'{}');keybinds={...DEFAULT_KEYS,...k};}catch(e){keybinds={...DEFAULT_KEYS};}
+keybinds={...DEFAULT_KEYS,...lsGet('webtris_keys',{})};
 // versus/blitz attack table (ponytail: standard modern versus, no all-spin/surge variants)
 const ATK={n:[0,1,2,4],ts:[0,2,4,6]},CMB=[0,1,1,2,2,3,3,4];
 const cvs=document.getElementById('c'), ctx=cvs.getContext('2d');
@@ -64,7 +66,7 @@ let rebindAction=null;
 let clickZones=[];
 let best={};
 let mouseX=-1,mouseY=-1; // ponytail: hover state via raw coords, no React state equivalent
-try{best=JSON.parse(localStorage.getItem('webtris_best')||'{}')}catch(e){}
+best=lsGet('webtris_best',{});
 
 // --- audio: tiny beeper, no assets ---
 let AC;
@@ -85,39 +87,39 @@ function rotateM(m,dir){
   }
   return r;
 }
-function refill(){
+function refill(b){
   const a=['I','J','L','O','S','T','Z'];
   for(let i=6;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]];}
-  bag.push(...a);
+  b.push(...a);
 }
-function collide(m,px,py){
+function collide(bd,m,px,py){
   for(let y=0;y<m.length;y++)for(let x=0;x<m[y].length;x++){
     if(!m[y][x])continue;
     const bx=px+x,by=py+y;
     if(bx<0||bx>=COLS||by>=ROWS+HID)return true;
-    if(by>=0&&board[by][bx])return true;
+    if(by>=0&&bd[by][bx])return true;
   }
   return false;
 }
 function spawn(t){
   t=t||bag.shift();
-  if(bag.length<7)refill();
+  if(bag.length<7)refill(bag);
   cur={t,m:SHAPES[t].m.map(r=>r.slice()),r:0,x:t=='O'?4:3,y:0};
   lockT=0;resets=0;tspinFlag=false;gravAcc=0;spawnT=0;
-  if(collide(cur.m,cur.x,cur.y))gameOver();
+  if(collide(board,cur.m,cur.x,cur.y))gameOver();
 }
 function startMode(m){
   mode=m;
   board=Array.from({length:ROWS+HID},()=>Array(COLS).fill(0));
-  bag=[];refill();
+  bag=[];refill(bag);
   hold=null;canHold=true;
   lines=0;score=0;level=1;combo=-1;b2b=0;pieces=0;time=0;
   flashes=[];popups=[];lands=[];drops=[];
   spawn();state='play';goPlay();
 }
-function grounded(){return collide(cur.m,cur.x,cur.y+1);}
+function grounded(){return collide(board,cur.m,cur.x,cur.y+1);}
 function tryMove(dx,dy){
-  if(collide(cur.m,cur.x+dx,cur.y+dy))return false;
+  if(collide(board,cur.m,cur.x+dx,cur.y+dy))return false;
   cur.x+=dx;cur.y+=dy;
   if(dx)tspinFlag=false;
   if(dy)lockT=0;
@@ -129,7 +131,7 @@ function rotate(dir){
   const nm=rotateM(cur.m,dir),to=(cur.r+dir+4)%4;
   const kicks=(cur.t=='I'?KI:KJ)[''+cur.r+to];
   for(const[dx,dy]of kicks){
-    if(!collide(nm,cur.x+dx,cur.y-dy)){
+    if(!collide(board,nm,cur.x+dx,cur.y-dy)){
       cur.m=nm;cur.x+=dx;cur.y-=dy;cur.r=to;tspinFlag=true;
       if(grounded()&&resets<MAX_RESETS){lockT=0;resets++;}
       beep(440,0.03,'square',0.02);
@@ -140,7 +142,7 @@ function rotate(dir){
 function hardDrop(){
   let d=0;
   const sy=cur.y;
-  while(!collide(cur.m,cur.x,cur.y+1)){cur.y++;d++;}
+  while(!collide(board,cur.m,cur.x,cur.y+1)){cur.y++;d++;}
   score+=d*2;
   if(d)drops.push({m:cur.m,x:cur.x,sy,dy:cur.y-sy,t:0});
   lock();
@@ -229,7 +231,7 @@ function saveBest(){
   if(mode=='versus')return;
   const lower=mode=='sprint',r=lower?time:score;
   if(!best[mode]||(lower?r<best[mode]:r>best[mode]))best[mode]=r;
-  try{localStorage.setItem('webtris_best',JSON.stringify(best))}catch(e){}
+   lsSet('webtris_best',best);
 }
 function fmtTime(ms){
   const m=ms/60000|0,s=(ms/1000|0)%60,c=(ms/10|0)%100;
@@ -275,7 +277,7 @@ function block(x,y,size,color,alpha=1){
   ctx.fillStyle=color;ctx.fillRect(x,y,size,size);
   ctx.fillStyle='rgba(255,255,255,.22)';ctx.fillRect(x,y,size,Math.min(4,size));
   ctx.fillStyle='rgba(0,0,0,.25)';ctx.fillRect(x,y+size-Math.min(4,size),size,Math.min(4,size));
-  ctx.strokeStyle='rgba(0,0,0,.35)';ctx.strokeRect(x+.5,y+.5,size-1,size-1);
+  ctx.lineWidth=1;ctx.strokeStyle='rgba(0,0,0,.35)';ctx.strokeRect(x+.5,y+.5,size-1,size-1);
   ctx.globalAlpha=1;
 }
 function cell(px,py,color,alpha=1){block(BX+px*CELL,BY+(py-HID)*CELL,CELL,color,alpha);}
@@ -337,7 +339,7 @@ function draw(){
       for(let my=0;my<dr.m.length;my++)for(let mx=0;mx<dr.m[my].length;mx++)
         if(dr.m[my][mx])cell(dr.x+mx,y+my,'#ffffff',0.9*(1-p));
     }
-    let gy=cur.y;while(!collide(cur.m,cur.x,gy+1))gy++;
+    let gy=cur.y;while(!collide(board,cur.m,cur.x,gy+1))gy++;
     for(let y=0;y<cur.m.length;y++)for(let x=0;x<cur.m[y].length;x++)
       if(cur.m[y][x])cell(cur.x+x,gy+y,SHAPES[cur.t].c,0.15);
     // smooth fall: fractional offset from gravity progress; 0 when landed
@@ -356,7 +358,7 @@ function draw(){
     for(let i=0;i<3&&i<bag.length;i++)mini(bag[i],300,168+i*52,10);
     panel(250,312,100,58);text('TIME',258,330,10,'#6b7288');text(fmtTime(time),258,354,14);
     text('YOU',BX+COLS*CELL/2,30,12,'#6b7288','center');
-    text('CPU - '+DIFF_NAMES[vs.diff-1],370+COLS*CELL/2,30,12,'#6b7288','center');
+    text('CPU - '+DIFFS[vs.diff-1].name,370+COLS*CELL/2,30,12,'#6b7288','center');
     meter(BX+COLS*CELL+4,vs.pIn.reduce((a,b)=>a+b,0));
     meter(360,vs.bIn.reduce((a,b)=>a+b,0));
     drawBot(vs.bot);
@@ -388,23 +390,23 @@ function draw(){
   if(state=='pause')drawPause();
   if(state=='over')drawOver();
 }
-// 3x5 block font for menu icons, rendered with block() so letters look like minos
-const GLYPH={
-  A:['.#.','#.#','###','#.#','#.#'],B:['##.','#.#','##.','#.#','##.'],
-  C:['.##','#..','#..','#..','.##'],E:['###','#..','##.','#..','###'],
-  F:['###','#..','##.','#..','#..'],L:['#..','#..','#..','#..','###'],
-  M:['#.#','###','###','#.#','#.#'],P:['##.','#.#','##.','#..','#..'],
-  S:['.##','#..','.#.','..#','##.'],V:['#.#','#.#','#.#','#.#','.#.'],
-  Z:['###','..#','.#.','#..','###'],
-};
-function glyphIcon(str,x,y,s,color){
-  for(const ch of str){
-    const g=GLYPH[ch];
-    if(g)for(let r=0;r<5;r++)for(let c=0;c<3;c++)if(g[r][c]=='#')block(x+c*s,y+r*s,s,color);
-    x+=s*4;
-  }
-}
 function drawMenu(){
+  // tetr.io-style full-width rows, tinted with each mode's accent
+  const GLYPH={
+    A:['.#.','#.#','###','#.#','#.#'],B:['##.','#.#','##.','#.#','##.'],
+    C:['.##','#..','#..','#..','.##'],E:['###','#..','##.','#..','###'],
+    F:['###','#..','##.','#..','#..'],L:['#..','#..','#..','#..','###'],
+    M:['#.#','###','###','#.#','#.#'],P:['##.','#.#','##.','#..','#..'],
+    S:['.##','#..','.#.','..#','##.'],V:['#.#','#.#','#.#','#.#','.#.'],
+    Z:['###','..#','.#.','#..','###'],
+  };
+  function glyphIcon(str,x,y,s,color){
+    for(const ch of str){
+      const g=GLYPH[ch];
+      if(g)for(let r=0;r<5;r++)for(let c=0;c<3;c++)if(g[r][c]=='#')block(x+c*s,y+r*s,s,color);
+      x+=s*4;
+    }
+  }
   // tetr.io-style full-width rows, tinted with each mode's accent
   const rows=[
     ...Object.entries(MODES).map(([m,md],i)=>({key:m,md,icon:['SP','BL','MA','ZE','VS'][i],fn:()=>m=='versus'?(goPlay(),state='diff'):startMode(m)})),
@@ -428,13 +430,12 @@ function drawMenu(){
     ctx.fillStyle=r.md.accent;ctx.fillRect(xt,y,wt,rh);
     ctx.globalAlpha=1;
     if(t>0.005){ // ponytail: guard against 0-width stroke rendering on init
-      ctx.save();ctx.shadowColor=r.md.accent;ctx.shadowBlur=18*t;
       ctx.strokeStyle=r.md.accent;ctx.lineWidth=2*t;ctx.strokeRect(xt+1,y+1,wt-2,rh-2);
-      ctx.restore();ctx.lineWidth=1;
     }
     glyphIcon(r.icon,xt+26,y+(rh-35)/2,7,r.md.accent);
-    text(r.md.label,xt+110,y+rh/2-4,24,t>0.5?r.md.accent:'#e8ebf5');
-    text(r.md.sub.toUpperCase(),xt+110,y+rh/2+16,11,t>0.5?r.md.accent:'#8a90a5');
+    // ponytail: text stays white on hover instead of swapping to accent
+    text(r.md.label,xt+110,y+rh/2-4,24,'#e8ebf5');
+    text(r.md.sub.toUpperCase(),xt+110,y+rh/2+16,11,'#8a90a5');
     if(best[r.key]){
       const b=r.key=='sprint'?fmtTime(best[r.key]):best[r.key];
       text('BEST  '+b,xt+wt-16,y+rh-14,10,'#9aa1b5','right');
@@ -451,14 +452,14 @@ function drawDiff(){
   ctx.fillStyle='#ef4a4a';ctx.fillRect(264,108,72,3);
   text('pick a difficulty',300,128,12,'#6b7288','center');
   const accents=['#3ecf4a','#7fd44a','#ffd75e','#f7941e','#ef4a4a'];
-  DIFF_NAMES.forEach((n,i)=>{
+  DIFFS.forEach((d,i)=>{
     const y=170+i*72;
     const hover=mouseX>=150&&mouseX<450&&mouseY>=y&&mouseY<y+56;
     ctx.fillStyle=hover?'rgba(40,46,68,0.85)':'rgba(16,19,29,0.82)';ctx.fillRect(150,y,300,56);
     ctx.fillStyle=accents[i];ctx.fillRect(150,y,4,56);
     ctx.strokeStyle=hover?accents[i]:'rgba(60,68,100,0.9)';ctx.strokeRect(150.5,y+.5,299,55);
     text('['+(i+1)+']',166,y+24,11,'#6b7288');
-    text(n,196,y+34,18,hover?accents[i]:'#e8ebf5');
+    text(d.name,196,y+34,18,hover?accents[i]:'#e8ebf5');
     clickZones.push({x:150,y,w:300,h:56,fn:()=>startVs(i+1)});
   });
   text('esc - back',300,628,11,'#6b7288','center');
@@ -504,12 +505,10 @@ function drawConfig(){
     clickZones.push({x,y,w:cw,h:26,fn:()=>{rebindAction=rebindAction==a.id?null:a.id;}});
   });
   const by=ky+24+5*30+14;
-  button(cx-80,by,160,34,'restore defaults',()=>{keybinds={...DEFAULT_KEYS};try{localStorage.setItem('webtris_keys',JSON.stringify(keybinds))}catch(e){}});
+  button(cx-80,by,160,34,'restore defaults',()=>{keybinds={...DEFAULT_KEYS};lsSet('webtris_keys',keybinds);});
   button(cx-80,by+44,160,34,'esc - back',()=>{goMenu();});
 }
-function saveHand(){
-  try{localStorage.setItem('webtris_handling',JSON.stringify({das:DAS,arr:ARR,soft:SOFT}))}catch(e){}
-}
+function saveHand(){lsSet('webtris_handling',{das:DAS,arr:ARR,soft:SOFT});}
 // --- versus helpers ---
 function startVs(diff){
   startMode('versus');
@@ -558,7 +557,7 @@ function drawOver(){
   const accent=won?'#ffd75e':'#ef4a4a';
   text(isVs?(vs.win?'VICTORY':'DEFEAT'):(won?'COMPLETE':'GAME OVER'),300,240,40,accent,'center');
   ctx.fillStyle=accent;ctx.fillRect(264,258,72,3);
-  text(isVs?'VS AI - '+DIFF_NAMES[vs.diff-1]:md.label,300,282,12,'#6b7288','center');
+  text(isVs?'VS AI - '+DIFFS[vs.diff-1].name:md.label,300,282,12,'#6b7288','center');
   if(isVs||mode=='sprint')text('TIME  '+fmtTime(time),300,330,22,'#e8ebf5','center');
   else text('SCORE  '+score,300,330,22,'#e8ebf5','center');
   text('LINES '+lines+'   PIECES '+pieces,300,360,12,'#9aa1b5','center');
@@ -586,7 +585,7 @@ addEventListener('keydown',e=>{
     else if(e.code=='Escape')goMenu();
     else if(rebindAction){
       keybinds[rebindAction]=e.code;
-      try{localStorage.setItem('webtris_keys',JSON.stringify(keybinds))}catch(e2){}
+      lsSet('webtris_keys',keybinds);
       rebindAction=null;
     }
     return;

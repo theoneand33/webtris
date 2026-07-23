@@ -2,10 +2,10 @@
 // VS AI: self-contained sim + Dellacherie brain. Shares consts/helpers with game.js.
 // ponytail: plain rotation, no wall kicks or t-spins — fine at casual level; add kicks if it feels weak.
 const DIFFS=[
-  {pps:0.5,noise:16},{pps:0.8,noise:8},{pps:1.1,noise:4},
-  {pps:1.5,noise:2},{pps:2.0,noise:0},
+  {name:'VERY EASY',pps:0.5,noise:16},{name:'EASY',pps:0.8,noise:8},
+  {name:'MEDIUM',pps:1.1,noise:4},{name:'HARD',pps:1.5,noise:2},
+  {name:'VERY HARD',pps:2.0,noise:0},
 ];
-const DIFF_NAMES=['VERY EASY','EASY','MEDIUM','HARD','VERY HARD'];
 
 function BotGame(diff){
   const d=DIFFS[Math.min(Math.max(diff,1),5)-1];
@@ -14,27 +14,13 @@ function BotGame(diff){
   bSpawn(g);
   return g;
 }
-function bRefill(g){
-  const a=['I','J','L','O','S','T','Z'];
-  for(let i=6;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]];}
-  g.bag.push(...a);
-}
-function bCollide(bd,m,px,py){
-  for(let y=0;y<m.length;y++)for(let x=0;x<m[y].length;x++){
-    if(!m[y][x])continue;
-    const bx=px+x,by=py+y;
-    if(bx<0||bx>=COLS||by>=ROWS+HID)return true;
-    if(by>=0&&bd[by][bx])return true;
-  }
-  return false;
-}
 function bSpawn(g){
-  if(!g.bag.length)bRefill(g);
+  if(!g.bag.length)refill(g.bag);
   const t=g.bag.shift();
-  if(g.bag.length<7)bRefill(g);
+  if(g.bag.length<7)refill(g.bag);
   g.cur={t,m:SHAPES[t].m.map(r=>r.slice()),r:0,x:t=='O'?4:3,y:0};
   g.plan=null;
-  if(bCollide(g.board,g.cur.m,g.cur.x,g.cur.y))g.dead=true;
+  if(collide(g.board,g.cur.m,g.cur.x,g.cur.y))g.dead=true;
 }
 // Dellacherie evaluation: lines good, height/holes/bumpiness bad
 function bEval(bd,m,px,py){
@@ -60,8 +46,8 @@ function botThink(g){
   for(let r=0;r<4;r++){
     if(r)m=rotateM(m,1);
     for(let x=-2;x<COLS;x++){
-      if(bCollide(g.board,m,x,0))continue;
-      let y=0;while(!bCollide(g.board,m,x,y+1))y++;
+      if(collide(g.board,m,x,0))continue;
+      let y=0;while(!collide(g.board,m,x,y+1))y++;
       const s=bEval(g.board,m,x,y)+(Math.random()-0.5)*g.noise;
       if(!best||s>best.s)best={r,x,y,s};
     }
@@ -70,20 +56,20 @@ function botThink(g){
 }
 function dropLock(g){
   const c=g.cur;let y=c.y;
-  while(!bCollide(g.board,c.m,c.x,y+1))y++;
+  while(!collide(g.board,c.m,c.x,y+1))y++;
   bLock(g,y);
 }
 function botStep(g){ // one action per tick: rotate, shift, or drop+lock
   const c=g.cur,p=g.plan;
   if(c.r!=p.r){
     const nm=rotateM(c.m,1);
-    if(!bCollide(g.board,nm,c.x,c.y)){c.m=nm;c.r=(c.r+1)%4;return;}
-    if(c.x<p.x&&!bCollide(g.board,c.m,c.x+1,c.y)){c.x++;return;} // shift first, retry spin later
-    if(c.x>p.x&&!bCollide(g.board,c.m,c.x-1,c.y)){c.x--;return;}
+    if(!collide(g.board,nm,c.x,c.y)){c.m=nm;c.r=(c.r+1)%4;return;}
+    if(c.x<p.x&&!collide(g.board,c.m,c.x+1,c.y)){c.x++;return;} // shift first, retry spin later
+    if(c.x>p.x&&!collide(g.board,c.m,c.x-1,c.y)){c.x--;return;}
     dropLock(g);return; // ponytail: stuck — take what we can get
   }
-  if(c.x<p.x&&!bCollide(g.board,c.m,c.x+1,c.y)){c.x++;return;}
-  if(c.x>p.x&&!bCollide(g.board,c.m,c.x-1,c.y)){c.x--;return;}
+  if(c.x<p.x&&!collide(g.board,c.m,c.x+1,c.y)){c.x++;return;}
+  if(c.x>p.x&&!collide(g.board,c.m,c.x-1,c.y)){c.x--;return;}
   dropLock(g);
 }
 function bLock(g,y){
