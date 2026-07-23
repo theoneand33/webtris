@@ -396,13 +396,13 @@ function drawMenu(){
     ...Object.entries(MODES).map(([m,md],i)=>({key:m,md,icon:['SP','BL','MA','ZE','VS'][i],fn:()=>m=='versus'?state='diff':startMode(m)})),
     {key:'cfg',md:{label:'CONFIG',sub:'handling & more',accent:'#6b7288'},icon:'CF',fn:()=>{state='config';}},
   ];
-  const rx=260,rw=320,rh=74,gap=8; // right-aligned column; photo fades to dark behind it
+  const rw=300,rh=74,gap=8,rx=600-rw-20; // flush to right edge; full-width transparent→dark scrim behind it
   // scrim: left→right transparent→dark, so the wallpaper reads on the left and buttons stay legible on the right
-  const sg=ctx.createLinearGradient(150,0,600,0);
+  const sg=ctx.createLinearGradient(0,0,600,0);
   sg.addColorStop(0,'rgba(7,8,13,0)');
-  sg.addColorStop(0.55,'rgba(7,8,13,0.55)');
-  sg.addColorStop(1,'rgba(7,8,13,0.92)');
-  ctx.fillStyle=sg;ctx.fillRect(150,0,450,660);
+  sg.addColorStop(0.45,'rgba(7,8,13,0.45)');
+  sg.addColorStop(1,'rgba(7,8,13,0.95)');
+  ctx.fillStyle=sg;ctx.fillRect(0,0,600,660);
   rows.forEach((r,i)=>{
     const y=44+i*(rh+gap);
     const hover=mouseX>=rx&&mouseX<rx+rw&&mouseY>=y&&mouseY<y+rh;
